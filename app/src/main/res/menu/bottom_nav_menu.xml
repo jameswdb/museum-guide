@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/camera_fragment"
+        android:icon="@android:drawable/ic_menu_camera"
+        android:title="@string/btn_switch_to_camera" />
+    <item
+        android:id="@+id/map_fragment"
+        android:icon="@android:drawable/ic_menu_mapmode"
+        android:title="@string/btn_switch_to_map" />
+</menu>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/camera_fragment">
+
+    <fragment
+        android:id="@+id/camera_fragment"
+        android:name="com.example.museumguide.ui.CameraFragment"
+        android:label="@string/scan_hint"
+        tools:layout="@layout/fragment_camera">
+        <action
+            android:id="@+id/action_camera_to_exhibit_detail"
+            app:destination="@id/exhibit_detail_fragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/map_fragment"
+        android:name="com.example.museumguide.map.MuseumMapFragment"
+        android:label="@string/map_title"
+        tools:layout="@layout/fragment_map">
+        <action
+            android:id="@+id/action_map_to_exhibit_detail"
+            app:destination="@id/exhibit_detail_fragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/exhibit_detail_fragment"
+        android:name="com.example.museumguide.ui.ExhibitDetailFragment"
+        android:label="@string/exhibit_detail"
+        tools:layout="@layout/fragment_exhibit_detail">
+        <argument
+            android:name="exhibit_id"
+            app:argType="long"
+            android:defaultValue="-1L" />
+    </fragment>
+
+</navigation>

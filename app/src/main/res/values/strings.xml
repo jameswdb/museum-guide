@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">博物馆导游</string>
+    <string name="welcome_message">欢迎来到博物馆</string>
+    <string name="scan_hint">对准文物，停留2秒获取介绍</string>
+    <string name="map_title">博物馆导游图</string>
+    <string name="exhibit_detail">文物详情</string>
+    <string name="btn_switch_to_map">查看地图</string>
+    <string name="btn_switch_to_camera">扫描文物</string>
+    <string name="permission_camera_rationale">需要摄像头权限来识别文物</string>
+    <string name="permission_location_rationale">需要位置权限来显示您在地图上的位置</string>
+    <string name="no_exhibit_found">未识别到文物</string>
+    <string name="loading">加载中…</string>
+    <string name="map_api_key_missing">请在 local.properties 中设置 MAPS_API_KEY</string>
+    <string name="play_audio">播放语音讲解</string>
+    <string name="stop_audio">停止播放</string>
+    <string name="gallery_pick">从相册选择图片</string>
+    <string name="gallery_close">关闭</string>
+    <string name="gallery_processing">正在识别图片…</string>
+    <string name="gallery_result">识别结果: %1$s (置信度: %2$d%%)</string>
+    <string name="gallery_no_detection">未检测到物体</string>
+</resources>

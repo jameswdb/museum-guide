@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Camera preview -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/preview_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Scanning overlay -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/overlay_dark" />
+
+    <!-- Scan area indicator -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/scan_area"
+        android:layout_width="250dp"
+        android:layout_height="250dp"
+        android:layout_gravity="center"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/secondary"
+        app:strokeWidth="3dp"
+        android:backgroundTint="@android:color/transparent" />
+
+    <!-- Scan hint text -->
+    <TextView
+        android:id="@+id/scan_hint_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="120dp"
+        android:text="@string/scan_hint"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:background="#66000000"
+        android:padding="12dp"
+        android:gravity="center" />
+
+    <!-- Gallery picker button (top-right) -->
+    <ImageButton
+        android:id="@+id/btn_pick_gallery"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:src="@android:drawable/ic_menu_gallery"
+        android:background="@drawable/round_button_bg"
+        android:contentDescription="@string/gallery_pick"
+        android:scaleType="center"
+        android:elevation="4dp" />
+
+    <!-- Gallery review overlay (hidden by default) -->
+    <FrameLayout
+        android:id="@+id/gallery_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:background="@color/black"
+        android:clickable="true"
+        android:elevation="8dp">
+
+        <ImageView
+            android:id="@+id/gallery_image_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true" />
+
+        <!-- Detection result text overlay on gallery image -->
+        <TextView
+            android:id="@+id/gallery_result_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="#CC000000"
+            android:padding="16dp"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+        <!-- Close gallery button -->
+        <ImageButton
+            android:id="@+id/btn_close_gallery"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="16dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:background="@drawable/round_button_bg"
+            android:contentDescription="@string/gallery_close"
+            android:scaleType="center"
+            android:elevation="10dp" />
+
+    </FrameLayout>
+
+    <!-- Loading indicator -->
+    <ProgressBar
+        android:id="@+id/loading_indicator"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        android:indeterminateTint="@color/secondary" />
+
+    <!-- Recognition overlay - appears when exhibit recognized -->
+    <LinearLayout
+        android:id="@+id/exhibit_info_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="#EEFFFFFF"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/exhibit_name_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/black" />
+
+        <TextView
+            android:id="@+id/exhibit_era_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:textColor="#666666" />
+
+        <TextView
+            android:id="@+id/exhibit_brief_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="14sp"
+            android:textColor="@color/black"
+            android:maxLines="3"
+            android:ellipsize="end" />
+
+        <Button
+            android:id="@+id/btn_read_more"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/exhibit_detail"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:textColor="@color/primary" />
+
+    </LinearLayout>
+
+</FrameLayout>
