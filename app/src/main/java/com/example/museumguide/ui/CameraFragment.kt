@@ -192,9 +192,13 @@ class CameraFragment : Fragment() {
     private fun processFrame(bitmap: android.graphics.Bitmap) {
         if (isGalleryMode) return // Pause real-time detection during gallery review
         lifecycleScope.launch(Dispatchers.IO) {
-            val detections = objectDetector?.detect(bitmap) ?: emptyList()
-            withContext(Dispatchers.Main) {
-                handleDetectionResult(detections)
+            try {
+                val detections = objectDetector?.detect(bitmap) ?: emptyList()
+                withContext(Dispatchers.Main) {
+                    handleDetectionResult(detections)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("CameraFragment", "Real-time detection failed", e)
             }
         }
     }
@@ -330,7 +334,8 @@ class CameraFragment : Fragment() {
 
     /**
      * Called when the user picks an image from the gallery.
-     * Loads the image, runs TFLite detection, and shows results.
+     * Loads the image, tries AI multimodal recognition first,
+     * and falls back to TFLite detection if AI is unavailable or fails.
      */
     private fun onGalleryImagePicked(uri: Uri) {
         isGalleryMode = true
@@ -359,9 +364,29 @@ class CameraFragment : Fragment() {
                 withContext(Dispatchers.Main) {
                     binding.galleryImageView.setImageBitmap(bitmap)
                     binding.loadingIndicator.visibility = View.GONE
+                    // Update UI: show AI processing text
+                    binding.galleryResultText.text = getString(R.string.gallery_ai_processing)
+                    binding.galleryResultText.visibility = View.VISIBLE
                 }
 
-                // Run detection
+                // Step 1: Try AI multimodal recognition first
+                val hasApiKey = com.example.museumguide.BuildConfig.GEMINI_API_KEY.isNotBlank()
+                if (hasApiKey) {
+                    val aiResponse = aiTourGuideService?.generateDescriptionFromImage(bitmap)
+                    if (aiResponse != null
+                        && aiResponse.title != "识别失败"
+                        && aiResponse.title != "识别出错"
+                        && aiResponse.title != "图片识别"
+                    ) {
+                        withContext(Dispatchers.Main) {
+                            binding.galleryResultText.text =
+                                "${aiResponse.title} — ${aiResponse.brief}"
+                        }
+                        return@launch
+                    }
+                }
+
+                // Step 2: Fallback to TFLite detection
                 val detections = objectDetector?.detect(bitmap) ?: emptyList()
 
                 withContext(Dispatchers.Main) {

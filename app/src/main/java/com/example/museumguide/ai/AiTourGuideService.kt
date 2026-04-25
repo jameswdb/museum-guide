@@ -1,5 +1,7 @@
 package com.example.museumguide.ai
 
+import android.graphics.Bitmap
+import android.util.Base64
 import com.example.museumguide.BuildConfig
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -9,6 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -274,6 +277,148 @@ class AiTourGuideService(
     /** Clear the in-memory cache. */
     fun clearCache() {
         cache.clear()
+    }
+
+    // ── Multimodal (image) methods ─────────────────────────────────
+
+    /**
+     * Generate a museum-style Chinese description for a bitmap image
+     * using Gemini multimodal capabilities (image + text).
+     *
+     * Compresses the image to max 800px, JPEG-encodes it as Base64,
+     * and sends it alongside a text prompt to the Gemini API.
+     *
+     * @param bitmap  The image bitmap to analyze
+     * @param context  Optional context hint (e.g. "文物", "古代艺术品")
+     * @return [AiResponse] with title, brief, description, and significance
+     */
+    suspend fun generateDescriptionFromImage(
+        bitmap: Bitmap,
+        context: String = "文物"
+    ): AiResponse {
+        // 1. No API key → return generic fallback immediately
+        if (apiKey.isBlank()) {
+            return AiResponse(
+                title = "图片识别",
+                brief = "请配置Gemini API密钥",
+                description = "当前未配置Gemini API密钥。请在local.properties中设置GEMINI_API_KEY以启用AI图片识别功能。",
+                significance = ""
+            )
+        }
+
+        // 2. Call Gemini multimodal API
+        return withContext(Dispatchers.IO) {
+            try {
+                val compressed = compressBitmap(bitmap)
+                val base64Image = bitmapToBase64(compressed)
+                val prompt = buildMultimodalPrompt(context)
+
+                val requestBody = gson.toJson(
+                    mapOf(
+                        "contents" to listOf(
+                            mapOf(
+                                "parts" to listOf(
+                                    mapOf("text" to prompt),
+                                    mapOf(
+                                        "inlineData" to mapOf(
+                                            "mimeType" to "image/jpeg",
+                                            "data" to base64Image
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+                        "generationConfig" to mapOf(
+                            "temperature" to 0.7,
+                            "maxOutputTokens" to 1024,
+                            "topP" to 0.9
+                        )
+                    )
+                ).toRequestBody("application/json".toMediaType())
+
+                val request = Request.Builder()
+                    .url("$endpointBaseUrl$API_PATH?key=$apiKey")
+                    .post(requestBody)
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                if (!response.isSuccessful || responseBody.isNullOrBlank()) {
+                    return@withContext AiResponse(
+                        title = "识别失败",
+                        brief = "API请求失败 (HTTP ${response.code})",
+                        description = "无法从AI服务获取图片识别结果，请稍后重试。",
+                        significance = ""
+                    )
+                }
+
+                parseGeminiResponse(responseBody, "图片识别")
+            } catch (e: Exception) {
+                AiResponse(
+                    title = "识别出错",
+                    brief = "AI处理失败",
+                    description = "图片分析过程中出现错误: ${e.message ?: "未知错误"}",
+                    significance = ""
+                )
+            }
+        }
+    }
+
+    /**
+     * Compress a bitmap to fit within maxDimension while maintaining aspect ratio.
+     */
+    private fun compressBitmap(bitmap: Bitmap, maxDimension: Int = 800): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+
+        if (width <= maxDimension && height <= maxDimension) {
+            return bitmap
+        }
+
+        val scale = if (width > height) {
+            maxDimension.toFloat() / width
+        } else {
+            maxDimension.toFloat() / height
+        }
+        val newWidth = (width * scale).toInt().coerceAtLeast(1)
+        val newHeight = (height * scale).toInt().coerceAtLeast(1)
+
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+    }
+
+    /**
+     * Convert a bitmap to a Base64-encoded JPEG string.
+     */
+    private fun bitmapToBase64(bitmap: Bitmap): String {
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+        val byteArray = outputStream.toByteArray()
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    }
+
+    /**
+     * Build a prompt for multimodal (image + text) analysis.
+     * Asks Gemini to identify the object in the image and produce
+     * a museum-style Chinese description in structured JSON format.
+     */
+    private fun buildMultimodalPrompt(context: String): String {
+        return """你是一个专业的博物馆导游AI助手。请分析这张图片中的物体，并生成一段优美的中文文物介绍。
+物体类别: $context
+
+要求：
+1. 识别图片中的主要物体，给出一个博物馆中常见的文物名称
+2. 用生动、专业的博物馆语言描述
+3. 内容要有文化底蕴
+4. 如果图片中的物体不是典型文物，请给出最接近的博物馆类别描述
+
+请严格按照以下JSON格式回复（不要包含markdown代码块标记，只返回纯JSON）：
+{
+  "title": "文物中文名称",
+  "brief": "一句话简介（25字以内）",
+  "description": "详细的文物描述（100-200字，包括外观、材质、工艺、历史背景等），用中文叙述",
+  "significance": "文物的文化历史意义（50-100字）"
+}"""
     }
 }
 

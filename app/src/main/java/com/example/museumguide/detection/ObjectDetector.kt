@@ -6,6 +6,7 @@ import android.graphics.RectF
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.HashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -94,16 +95,22 @@ class ObjectDetector(
         val outputScores = Array(1) { FloatArray(MAX_DETECTIONS) }
         val numDetections = FloatArray(1)
 
-        val outputMap = mapOf(
-            0 to output,
-            1 to outputClasses,
-            2 to outputScores,
-            3 to numDetections
-        )
+        // Use explicit HashMap instead of mapOf() to avoid Kotlin type inference
+        // issues that cause TFLite to misinterpret FloatArray shape [1] as [1, 1].
+        val outputMap = HashMap<Int, Any>()
+        outputMap[0] = output
+        outputMap[1] = outputClasses
+        outputMap[2] = outputScores
+        outputMap[3] = numDetections
 
-        interpreter?.runForMultipleInputsOutputs(
-            arrayOf(tfImage), outputMap
-        )
+        try {
+            interpreter?.runForMultipleInputsOutputs(
+                arrayOf(tfImage), outputMap
+            )
+        } catch (e: Throwable) {
+            android.util.Log.e("ObjectDetector", "TFLite inference failed: ${e.message}", e)
+            return emptyList()
+        }
 
         return postprocess(output[0], outputClasses[0], outputScores[0], numDetections[0])
     }
