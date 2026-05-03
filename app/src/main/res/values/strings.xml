@@ -20,4 +20,8 @@
     <string name="gallery_result">识别结果: %1$s (置信度: %2$d%%)</string>
     <string name="gallery_no_detection">未检测到物体</string>
     <string name="gallery_ai_processing">AI正在识别图片…</string>
+
+    <!-- New strings for v1.2 Home/Settings -->
+    <string name="home_title">首页</string>
+    <string name="museum_detail_title">博物馆详情</string>
 </resources>

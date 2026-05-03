@@ -1,240 +1,173 @@
 package com.example.museumguide.ai
 
+import android.content.Context
 import android.graphics.Bitmap
-import android.util.Base64
-import com.example.museumguide.BuildConfig
-import com.google.gson.Gson
-import com.google.gson.JsonObject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
- * AI-powered tour guide service that uses Google Gemini API to generate
- * rich museum-style descriptions for detected artifacts.
+ * Facade for the AI-powered tour guide service.
  *
- * ## How it works
- * 1. When the local database has an exhibit for a detected label, AI can
- *    enhance the narration with more vivid, varied descriptions.
- * 2. When NO local exhibit matches, AI generates a description on-the-fly,
- *    allowing the app to talk about any detected object.
- * 3. Responses are cached in memory to avoid redundant API calls.
+ * Supports multiple AI model providers:
+ * - Gemini (default, already integrated)
+ * - DeepSeek (OpenAI-compatible)
+ * - Qwen / 通义千问 (OpenAI-compatible)
+ * - ERNIE / 文心一言 (OpenAI-compatible)
  *
- * ## Setup
- * Add to `local.properties`:
- * ```
- * GEMINI_API_KEY=your_gemini_api_key_here
- * ```
- * Obtain a free API key at https://aistudio.google.com/apikey
- *
- * ## Fallback behaviour
- * - No API key configured → returns localised fallback text
- * - Network error → returns cached or fallback text
- * - API error → returns fallback with error hint
+ * Features:
+ * - Delegates to the configured provider for AI generation
+ * - Falls back to built-in Chinese descriptions when AI is unavailable
+ * - In-memory cache to avoid redundant API calls
+ * - Graceful degradation: no API key → built-in descriptions
  */
-class AiTourGuideService(
-    private val apiKey: String = BuildConfig.GEMINI_API_KEY,
-    /**
-     * Optional OkHttpClient for dependency injection (testing).
-     * Defaults to a standard client with 15s timeouts.
-     */
-    private val okHttpClient: OkHttpClient? = null,
-    /**
-     * Base URL for the Gemini API. Override for testing with MockWebServer.
-     * Default: official Google API endpoint.
-     */
-    private val endpointBaseUrl: String = "https://generativelanguage.googleapis.com"
-) {
+class AiTourGuideService(private val appContext: Context? = null) {
+
     companion object {
-        private const val API_PATH =
-            "/v1beta/models/gemini-2.0-flash:generateContent"
-        private const val TIMEOUT_SECONDS = 15L
         private const val MAX_CACHE_SIZE = 100
     }
 
-    /** In-memory LRU-like cache: detected label → generated response. */
     private val cache = ConcurrentHashMap<String, AiResponse>()
-    private val client: OkHttpClient = okHttpClient ?: OkHttpClient.Builder()
-        .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .build()
-    private val gson = Gson()
+    private var config: AiConfiguration = AiConfiguration()
+
+    // Provider instances
+    private val geminiProvider = GeminiProvider()
+    private val deepseekProvider = OpenAiCompatibleProvider.deepSeek()
+    private val qwenProvider = OpenAiCompatibleProvider.qwen()
+    private val ernieProvider = OpenAiCompatibleProvider.ernie()
+
+    /** Reload configuration from SharedPreferences. */
+    fun reloadConfig() {
+        appContext?.let {
+            config = AiConfiguration.load(it)
+        }
+    }
+
+    /** Build a cache key that includes the provider to avoid stale cross-provider hits. */
+    private fun cacheKey(label: String): String = "${config.activeProviderId}:$label"
 
     /**
      * Generate a museum-style Chinese description for a detected label.
      *
-     * @param label  The detected label from TFLite (e.g. "vase", "bronze")
-     * @param context  Optional context hint (e.g. "文物", "古代艺术品")
-     * @return [AiResponse] with title, brief, description, and significance
+     * Strategy:
+     * 1. Check in-memory cache (scoped by provider)
+     * 2. Get the active provider and its API key
+     * 3. Try AI generation from the active provider
+     * 4. If AI fails → return built-in fallback description
+     *
+     * @param label The detected label from TFLite (e.g. "vase")
+     * @param context Optional context hint
+     * @return AiResponse with title/brief/description/significance
      */
     suspend fun generateDescription(
         label: String,
         context: String = "文物"
     ): AiResponse {
-        // 1. Check in-memory cache
-        cache[label]?.let { return it }
+        reloadConfig()
 
-        // 2. No API key → return built-in fallback
-        if (apiKey.isBlank()) {
-            val fallback = buildFallbackResponse(label)
-            cache[label] = fallback
-            return fallback
-        }
+        val key = cacheKey(label)
 
-        // 3. Call Gemini API
-        return withContext(Dispatchers.IO) {
-            try {
-                val prompt = buildPrompt(label, context)
-                val requestBody = gson.toJson(
-                    mapOf(
-                        "contents" to listOf(
-                            mapOf("parts" to listOf(mapOf("text" to prompt)))
-                        ),
-                        "generationConfig" to mapOf(
-                            "temperature" to 0.7,
-                            "maxOutputTokens" to 1024,
-                            "topP" to 0.9
-                        )
-                    )
-                ).toRequestBody("application/json".toMediaType())
+        // 1. Check cache (provider-scoped)
+        val cached = cache[key]
+        if (cached != null) return cached
 
-                val request = Request.Builder()
-                    .url("$endpointBaseUrl$API_PATH?key=$apiKey")
-                    .post(requestBody)
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
-
-                if (!response.isSuccessful || responseBody.isNullOrBlank()) {
-                    return@withContext buildFallbackResponse(
-                        label, "API请求失败 (HTTP ${response.code})"
-                    )
-                }
-
-                val aiResponse = parseGeminiResponse(responseBody, label)
-
-                // Cache the result (evict oldest if at capacity)
-                if (cache.size >= MAX_CACHE_SIZE) {
-                    val oldest = cache.keys.firstOrNull()
-                    if (oldest != null) cache.remove(oldest)
-                }
-                cache[label] = aiResponse
-
-                aiResponse
-            } catch (e: Exception) {
-                buildFallbackResponse(label, e.message ?: "未知错误")
+        // 2. Try the active provider
+        val apiKey = AiConfiguration.getActiveApiKey(config)
+        if (apiKey.isNotBlank()) {
+            val provider = getActiveProvider()
+            val result = provider?.generateDescription(label, context, apiKey)
+            if (result != null && result.description.isNotBlank()) {
+                cacheResult(key, result)
+                return result
             }
         }
+
+        // 3. Fallback: try Gemini with BuildConfig key (old behavior)
+        if (com.example.museumguide.BuildConfig.GEMINI_API_KEY.isNotBlank()) {
+            val geminiResult = geminiProvider.generateDescription(
+                label, context, com.example.museumguide.BuildConfig.GEMINI_API_KEY
+            )
+            if (geminiResult != null && geminiResult.description.isNotBlank()) {
+                cacheResult(key, geminiResult)
+                return geminiResult
+            }
+        }
+
+        // 4. Final fallback: built-in descriptions
+        val fallback = buildFallbackResponse(label)
+        cacheResult(key, fallback)
+        return fallback
     }
 
     /**
-     * Build a structured prompt that asks Gemini to generate a
-     * Chinese museum-style description in JSON format.
+     * Generate description from a bitmap image using multimodal AI.
+     * Image results are NOT cached since each input is unique.
+     * Falls back gracefully if the active provider doesn't support multimodality.
      */
-    private fun buildPrompt(label: String, context: String): String {
-        return """你是一个专业的博物馆导游AI助手。请根据检测到的物体标签，生成一段优美的中文文物介绍。
-检测标签: "$label"
-物体类别: $context
+    suspend fun generateDescriptionFromImage(
+        bitmap: Bitmap,
+        context: String = "文物"
+    ): AiResponse {
+        reloadConfig()
 
-要求：
-1. 基于标签推测一个合理的文物名称（不要直接翻译标签，给出一个博物馆中常见的文物名称）
-2. 用生动、专业的博物馆语言描述
-3. 内容要有文化底蕴
+        val apiKey = AiConfiguration.getActiveApiKey(config)
 
-请严格按照以下JSON格式回复（不要包含markdown代码块标记，只返回纯JSON）：
-{
-  "title": "文物中文名称",
-  "brief": "一句话简介（25字以内）",
-  "description": "详细的文物描述（100-200字，包括外观、材质、工艺、历史背景等），用中文叙述",
-  "significance": "文物的文化历史意义（50-100字）"
-}"""
-    }
-
-    /**
-     * Parse the Gemini API response JSON to extract the generated content.
-     */
-    private fun parseGeminiResponse(responseBody: String, label: String): AiResponse {
-        try {
-            val root: JsonObject = gson.fromJson(responseBody, JsonObject::class.java)
-            val candidates = root.getAsJsonArray("candidates")
-            if (candidates != null && candidates.size() > 0) {
-                val candidate = candidates[0].asJsonObject
-                val content = candidate.getAsJsonObject("content")
-                val parts = content?.getAsJsonArray("parts")
-                if (parts != null && parts.size() > 0) {
-                    val text = parts[0].asJsonObject.get("text")?.asString ?: ""
-                    if (text.isNotBlank()) {
-                        return extractJsonFromText(text, label)
-                    }
+        // 1. Try the active provider if it supports multimodal
+        if (apiKey.isNotBlank()) {
+            val provider = getActiveProvider()
+            if (provider?.supportsMultimodal == true) {
+                val result = provider.generateDescriptionFromImage(bitmap, context, apiKey)
+                if (result != null && result.title != "识别失败" && result.title != "识别出错") {
+                    return result
                 }
-            }
-            // Check for blocked response
-            val promptFeedback = root.getAsJsonObject("promptFeedback")
-            if (promptFeedback != null) {
-                val blockReason = promptFeedback.get("blockReason")?.asString
-                if (blockReason != null) {
-                    return buildFallbackResponse(label, "内容被拦截: $blockReason")
-                }
-            }
-        } catch (e: Exception) {
-            return buildFallbackResponse(label, "解析响应失败: ${e.message}")
-        }
-        return buildFallbackResponse(label, "无法解析AI响应")
-    }
-
-    /**
-     * Extract structured content from the Gemini response text.
-     * Tries to find and parse a JSON object within the text.
-     */
-    private fun extractJsonFromText(text: String, label: String): AiResponse {
-        // Find outermost JSON braces to extract structured content
-        val cleaned = text.trim()
-        val jsonStart = cleaned.indexOf('{')
-        val jsonEnd = cleaned.lastIndexOf('}')
-
-        if (jsonStart >= 0 && jsonEnd > jsonStart) {
-            val jsonStr = cleaned.substring(jsonStart, jsonEnd + 1)
-            try {
-                val json = gson.fromJson(jsonStr, JsonObject::class.java)
-                if (json != null) {
-                    return AiResponse(
-                        title = json.get("title")?.asString ?: label,
-                        brief = json.get("brief")?.asString
-                            ?: "检测到「$label」",
-                        description = json.get("description")?.asString
-                            ?: generateLocalDescription(label),
-                        significance = json.get("significance")?.asString ?: ""
-                    )
-                }
-            } catch (_: Exception) {
-                // JSON parse failed, continue to fallback
             }
         }
 
-        // Fallback: use raw text as description
-        val truncated = if (text.length > 500) text.take(500) + "…" else text
+        // 2. Fallback: try Gemini (always supports multimodal)
+        if (com.example.museumguide.BuildConfig.GEMINI_API_KEY.isNotBlank()) {
+            val geminiResult = geminiProvider.generateDescriptionFromImage(
+                bitmap, context, com.example.museumguide.BuildConfig.GEMINI_API_KEY
+            )
+            if (geminiResult != null && geminiResult.title != "识别失败" && geminiResult.title != "识别出错") {
+                return geminiResult
+            }
+        }
+
+        // 3. Final fallback
         return AiResponse(
-            title = label,
-            brief = "检测到「$label」",
-            description = truncated.ifBlank { generateLocalDescription(label) },
+            title = "图片识别",
+            brief = "AI识别不可用",
+            description = "当前未配置有效的AI API密钥。请前往首页配置AI模型和API密钥。",
             significance = ""
         )
     }
 
-    /**
-     * Build a fallback response when AI is unavailable.
-     */
-    private fun buildFallbackResponse(
-        label: String,
-        reason: String? = null
-    ): AiResponse {
+    /** Get the currently selected provider instance. */
+    private fun getActiveProvider(): AiProvider? {
+        return when (config.activeProviderId) {
+            AiConfiguration.PROVIDER_GEMINI -> geminiProvider
+            AiConfiguration.PROVIDER_DEEPSEEK -> deepseekProvider
+            AiConfiguration.PROVIDER_QWEN -> qwenProvider
+            AiConfiguration.PROVIDER_ERNIE -> ernieProvider
+            else -> null
+        }
+    }
+
+    /** Cache a result, evicting oldest if at capacity. */
+    private fun cacheResult(label: String, response: AiResponse) {
+        if (cache.size >= MAX_CACHE_SIZE) {
+            val oldest = cache.keys.firstOrNull()
+            if (oldest != null) cache.remove(oldest)
+        }
+        cache[label] = response
+    }
+
+    /** Clear the in-memory cache. */
+    fun clearCache() {
+        cache.clear()
+    }
+
+    // ── Built-in fallback descriptions ──────────────────────────────
+
+    private fun buildFallbackResponse(label: String, reason: String? = null): AiResponse {
         val desc = generateLocalDescription(label)
         val note = if (reason != null) "\n\n（AI提示: $reason）" else ""
         return AiResponse(
@@ -245,9 +178,6 @@ class AiTourGuideService(
         )
     }
 
-    /**
-     * Generate a basic localised description without AI, based on the label.
-     */
     private fun generateLocalDescription(label: String): String {
         return when (label.lowercase()) {
             "vase" -> "这是一件精美的陶瓷器皿。瓶身线条流畅，釉色温润，可能出自中国古代官窑。瓷器是中国古代最重要的发明之一，通过丝绸之路远销海外，成为中华文明的象征。"
@@ -273,166 +203,4 @@ class AiTourGuideService(
     private fun formatTitle(label: String): String {
         return label.replaceFirstChar { it.uppercase() }
     }
-
-    /** Clear the in-memory cache. */
-    fun clearCache() {
-        cache.clear()
-    }
-
-    // ── Multimodal (image) methods ─────────────────────────────────
-
-    /**
-     * Generate a museum-style Chinese description for a bitmap image
-     * using Gemini multimodal capabilities (image + text).
-     *
-     * Compresses the image to max 800px, JPEG-encodes it as Base64,
-     * and sends it alongside a text prompt to the Gemini API.
-     *
-     * @param bitmap  The image bitmap to analyze
-     * @param context  Optional context hint (e.g. "文物", "古代艺术品")
-     * @return [AiResponse] with title, brief, description, and significance
-     */
-    suspend fun generateDescriptionFromImage(
-        bitmap: Bitmap,
-        context: String = "文物"
-    ): AiResponse {
-        // 1. No API key → return generic fallback immediately
-        if (apiKey.isBlank()) {
-            return AiResponse(
-                title = "图片识别",
-                brief = "请配置Gemini API密钥",
-                description = "当前未配置Gemini API密钥。请在local.properties中设置GEMINI_API_KEY以启用AI图片识别功能。",
-                significance = ""
-            )
-        }
-
-        // 2. Call Gemini multimodal API
-        return withContext(Dispatchers.IO) {
-            try {
-                val compressed = compressBitmap(bitmap)
-                val base64Image = bitmapToBase64(compressed)
-                val prompt = buildMultimodalPrompt(context)
-
-                val requestBody = gson.toJson(
-                    mapOf(
-                        "contents" to listOf(
-                            mapOf(
-                                "parts" to listOf(
-                                    mapOf("text" to prompt),
-                                    mapOf(
-                                        "inlineData" to mapOf(
-                                            "mimeType" to "image/jpeg",
-                                            "data" to base64Image
-                                        )
-                                    )
-                                )
-                            )
-                        ),
-                        "generationConfig" to mapOf(
-                            "temperature" to 0.7,
-                            "maxOutputTokens" to 1024,
-                            "topP" to 0.9
-                        )
-                    )
-                ).toRequestBody("application/json".toMediaType())
-
-                val request = Request.Builder()
-                    .url("$endpointBaseUrl$API_PATH?key=$apiKey")
-                    .post(requestBody)
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
-
-                if (!response.isSuccessful || responseBody.isNullOrBlank()) {
-                    return@withContext AiResponse(
-                        title = "识别失败",
-                        brief = "API请求失败 (HTTP ${response.code})",
-                        description = "无法从AI服务获取图片识别结果，请稍后重试。",
-                        significance = ""
-                    )
-                }
-
-                parseGeminiResponse(responseBody, "图片识别")
-            } catch (e: Exception) {
-                AiResponse(
-                    title = "识别出错",
-                    brief = "AI处理失败",
-                    description = "图片分析过程中出现错误: ${e.message ?: "未知错误"}",
-                    significance = ""
-                )
-            }
-        }
-    }
-
-    /**
-     * Compress a bitmap to fit within maxDimension while maintaining aspect ratio.
-     */
-    private fun compressBitmap(bitmap: Bitmap, maxDimension: Int = 800): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-
-        if (width <= maxDimension && height <= maxDimension) {
-            return bitmap
-        }
-
-        val scale = if (width > height) {
-            maxDimension.toFloat() / width
-        } else {
-            maxDimension.toFloat() / height
-        }
-        val newWidth = (width * scale).toInt().coerceAtLeast(1)
-        val newHeight = (height * scale).toInt().coerceAtLeast(1)
-
-        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-    }
-
-    /**
-     * Convert a bitmap to a Base64-encoded JPEG string.
-     */
-    private fun bitmapToBase64(bitmap: Bitmap): String {
-        val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-        val byteArray = outputStream.toByteArray()
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
-    }
-
-    /**
-     * Build a prompt for multimodal (image + text) analysis.
-     * Asks Gemini to identify the object in the image and produce
-     * a museum-style Chinese description in structured JSON format.
-     */
-    private fun buildMultimodalPrompt(context: String): String {
-        return """你是一个专业的博物馆导游AI助手。请分析这张图片中的物体，并生成一段优美的中文文物介绍。
-物体类别: $context
-
-要求：
-1. 识别图片中的主要物体，给出一个博物馆中常见的文物名称
-2. 用生动、专业的博物馆语言描述
-3. 内容要有文化底蕴
-4. 如果图片中的物体不是典型文物，请给出最接近的博物馆类别描述
-
-请严格按照以下JSON格式回复（不要包含markdown代码块标记，只返回纯JSON）：
-{
-  "title": "文物中文名称",
-  "brief": "一句话简介（25字以内）",
-  "description": "详细的文物描述（100-200字，包括外观、材质、工艺、历史背景等），用中文叙述",
-  "significance": "文物的文化历史意义（50-100字）"
-}"""
-    }
 }
-
-/**
- * Structured response from the AI tour guide service.
- *
- * @property title  Chinese display name for the detected object
- * @property brief  Short one-line summary for overlay display
- * @property description  Full narrative description for TTS narration
- * @property significance  Cultural / historical significance context
- */
-data class AiResponse(
-    val title: String,
-    val brief: String,
-    val description: String,
-    val significance: String
-)

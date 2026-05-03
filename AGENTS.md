@@ -37,38 +37,75 @@
 2. 添加 TensorFlow Lite 模型文件到 `app/src/main/assets/detect.tflite`
 3. 在 `local.properties` 或 `AndroidManifest.xml` 中配置 Google Maps API Key
 
-## Project Structure
+## Project Structure (v1.2)
 ```
 viewP/
 ├── app/
-│   ├── build.gradle.kts              # 应用模块配置
+│   ├── build.gradle.kts              # 应用模块配置 (v1.2, versionCode=3)
 │   ├── proguard-rules.pro            # 混淆规则
-│   └── src/main/
-│       ├── AndroidManifest.xml       # 权限和组件声明
-│       ├── assets/                   # TFLite模型等静态资源
-│       ├── java/com/example/museumguide/
-│       │   ├── MainActivity.kt       # 入口Activity，管理TTS
-│       │   ├── camera/
-│       │   │   └── CameraManager.kt  # CameraX封装
-│       │   ├── detection/
-│       │   │   └── ObjectDetector.kt # TFLite物体检测
-│       │   ├── exhibit/
-│       │   │   └── ExhibitRepository.kt  # 文物数据仓库
-│       │   ├── map/
-│       │   │   └── MuseumMapFragment.kt  # Google Maps导游图
-│       │   ├── model/
-│       │   │   ├── Exhibit.kt        # 文物数据实体
-│       │   │   ├── ExhibitDao.kt     # Room DAO
-│       │   │   └── ExhibitDatabase.kt # Room数据库
-│       │   └── ui/
-│       │       ├── CameraFragment.kt       # 摄像头扫描界面
-│       │       └── ExhibitDetailFragment.kt # 文物详情界面
-│       └── res/                      # 布局、导航、资源
+│   └── src/
+│       ├── main/
+│       │   ├── AndroidManifest.xml        # 权限和组件声明
+│       │   ├── assets/                    # TFLite模型等静态资源
+│       │   ├── java/com/example/museumguide/
+│       │   │   ├── MainActivity.kt        # 入口Activity，管理TTS (语速1.0)
+│       │   │   ├── ai/
+│       │   │   │   ├── AiConfiguration.kt     # AI Provider配置持久化
+│       │   │   │   ├── AiProvider.kt          # AI Provider接口
+│       │   │   │   ├── AiTourGuideService.kt  # 多Provider门面+降级+缓存
+│       │   │   │   ├── GeminiProvider.kt      # Google Gemini实现(多模态)
+│       │   │   │   └── OpenAiCompatibleProvider.kt  # DeepSeek/Qwen/ERNIE
+│       │   │   ├── camera/
+│       │   │   │   └── CameraManager.kt  # CameraX封装
+│       │   │   ├── detection/
+│       │   │   │   └── ObjectDetector.kt # TFLite物体检测
+│       │   │   ├── exhibit/
+│       │   │   │   └── ExhibitRepository.kt  # 文物数据仓库
+│       │   │   ├── map/
+│       │   │   │   └── MuseumMapFragment.kt  # Google Maps导游图
+│       │   │   ├── model/
+│       │   │   │   ├── Exhibit.kt        # 文物数据实体
+│       │   │   │   ├── ExhibitDao.kt     # Room DAO
+│       │   │   │   ├── ExhibitDatabase.kt # Room数据库
+│       │   │   │   └── MuseumInfo.kt     # 十大博物馆内置数据(37件展品)
+│       │   │   └── ui/
+│       │   │       ├── CameraFragment.kt       # 摄像头扫描界面 (2秒停留)
+│       │   │       ├── ExhibitDetailFragment.kt # 文物详情界面
+│       │   │       ├── HomeFragment.kt         # 首页设置中心(AI配置+定位+博物馆列表)
+│       │   │       ├── MuseumAdapter.kt        # 博物馆列表适配器
+│       │   │       └── MuseumDetailFragment.kt # 博物馆详情+TTS播报
+│       │   └── res/
+│       │       ├── layout/         # activity_main, fragment_camera, fragment_home,
+│       │       │                   # fragment_map, fragment_exhibit_detail,
+│       │       │                   # fragment_museum_detail, card_exhibit, item_museum_card
+│       │       ├── navigation/nav_graph.xml  # 5个目的地, 3标签
+│       │       ├── menu/bottom_nav_menu.xml  # 首页|扫描|地图
+│       │       └── values/         # strings/colors/themes
+│       ├── test/                   # 60个单元测试 (8文件)
+│       │   └── java/com/example/museumguide/
+│       │       ├── ai/
+│       │       │   ├── AiConfigurationTest.kt          # 7 tests
+│       │       │   ├── AiTourGuideServiceTest.kt        # 10 tests
+│       │       │   ├── AiTourGuideServiceMultimodalTest.kt # 2 tests
+│       │       │   ├── GeminiProviderTest.kt            # 3 tests
+│       │       │   └── OpenAiCompatibleProviderTest.kt  # 5 tests
+│       │       ├── detection/
+│       │       │   └── ObjectDetectorTest.kt            # 19 tests
+│       │       ├── exhibit/
+│       │       │   └── ExhibitRepositoryTest.kt         # 7 tests
+│       │       └── model/
+│       │           └── ChinaMuseumsTest.kt              # 7 tests
+│       └── androidTest/            # 5个插桩测试
+│           └── java/...
+│               └── ExhibitDaoTest.kt                    # 5 tests
 ├── build.gradle.kts                  # 项目级配置
 ├── settings.gradle.kts               # 项目设置
-├── gradle.properties                 # Gradle属性
+├── gradle.properties                 # (已修复JDK17路径)
+├── FEATURES.md                       # 功能清单
+├── REQUIREMENTS_AND_TEST.md          # 需求设计文档+测试用例
+└── TEST_EXECUTION_GUIDE.md           # 功能测试执行指南
 └── gradle/wrapper/
-    └── gradle-wrapper.properties     # Gradle版本配置
+    └── gradle-wrapper.properties     # Gradle 8.5
 ```
 
 ## Architecture Notes

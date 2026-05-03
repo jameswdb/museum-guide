@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
         textToSpeech = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 textToSpeech?.language = Locale.CHINESE
-                textToSpeech?.setSpeechRate(0.9f) // Slightly slower for clarity
+                textToSpeech?.setSpeechRate(1.0f) // Normal speed for Chinese narration
             }
         }
 

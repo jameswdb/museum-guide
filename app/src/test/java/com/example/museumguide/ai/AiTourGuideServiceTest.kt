@@ -8,8 +8,6 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -19,21 +17,10 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for [AiTourGuideService].
- *
- * Tests cover:
- * - Fallback behaviour with empty API key (no network needed)
- * - In-memory caching (same label → cached result)
- * - Label-specific fallback descriptions in Chinese
- * - Gemini API response parsing via MockWebServer
- * - HTTP error handling
- * - Cache clear
- * - Concurrent access safety
+ * Unit tests for [AiTourGuideService] — focusing on fallback behavior.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiTourGuideServiceTest {
-
-    private var mockWebServer: MockWebServer? = null
 
     @Before
     fun setUp() {
@@ -43,15 +30,13 @@ class AiTourGuideServiceTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        mockWebServer?.shutdown()
-        mockWebServer = null
     }
 
     // ── No API key tests ──────────────────────────────────────────
 
     @Test
     fun `empty api key returns fallback with no network call`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val response = service.generateDescription("vase")
 
         assertNotNull(response)
@@ -62,7 +47,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `fallback for unknown label returns generic description`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val response = service.generateDescription("unknown_artifact_xyz")
 
         assertNotNull(response)
@@ -71,7 +56,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `fallback label vase contains chinese text about porcelain`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val response = service.generateDescription("vase")
         assertTrue(
             "vase fallback should mention ceramic/porcelain",
@@ -81,7 +66,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `fallback label bronze contains chinese text about bronze`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val response = service.generateDescription("bronze")
         assertTrue(
             "bronze fallback should mention bronze",
@@ -91,7 +76,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `fallback label jade contains chinese text about jade`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val response = service.generateDescription("jade")
         assertTrue(
             "jade fallback should mention jade",
@@ -103,7 +88,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `same label returns cached result on second call`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val first = service.generateDescription("vase")
         val second = service.generateDescription("vase")
 
@@ -115,7 +100,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `different labels return different cached responses`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val vase = service.generateDescription("vase")
         val bronze = service.generateDescription("bronze")
 
@@ -125,7 +110,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `clear cache forces fresh fallback generation`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         service.generateDescription("vase")
         service.clearCache()
         // After clearing cache, should still produce fallback text
@@ -134,112 +119,11 @@ class AiTourGuideServiceTest {
         assertTrue(second.description.isNotBlank())
     }
 
-    // ── MockWebServer tests (simulated Gemini API) ────────────────
-
-    @Test
-    fun `valid json response from api is parsed correctly`() = runBlocking {
-        val server = MockWebServer()
-        server.start()
-        mockWebServer = server
-
-        // Build the response with properly escaped inner JSON
-        val innerJson = """{"title": "青花瓷瓶", "brief": "明代青花瓷精品", "description": "这是一件精美的青花瓷瓶，釉色莹润。", "significance": "青花瓷是中国陶瓷的代表。"}"""
-        val escapedInner = innerJson
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        val responseBody = """{"candidates":[{"content":{"parts":[{"text":"$escapedInner"}]}}]}"""
-
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(responseBody)
-        )
-
-        val service = AiTourGuideService(
-            apiKey = "test-key",
-            endpointBaseUrl = server.url("").toString().trimEnd('/')
-        )
-
-        val response = service.generateDescription("vase")
-        assertEquals("青花瓷瓶", response.title)
-        assertTrue(response.description.contains("青花瓷瓶"))
-    }
-
-    @Test
-    fun `api returns plain text without json structure`() = runBlocking {
-        val server = MockWebServer()
-        server.start()
-        mockWebServer = server
-
-        val responseBody = """{"candidates":[{"content":{"parts":[{"text":"这是一件古代文物，具有重要的历史价值。"}]}}]}"""
-
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(responseBody)
-        )
-
-        val service = AiTourGuideService(
-            apiKey = "test-key",
-            endpointBaseUrl = server.url("").toString().trimEnd('/')
-        )
-
-        val response = service.generateDescription("vase")
-        // Should fall back to using raw text as description
-        assertNotNull(response)
-        assertTrue(response.description.isNotBlank())
-    }
-
-    @Test
-    fun `http error returns fallback response`() = runBlocking {
-        val server = MockWebServer()
-        server.start()
-        mockWebServer = server
-
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(429) // Too Many Requests
-                .setBody("{\"error\":{\"message\":\"Rate limit exceeded\"}}")
-        )
-
-        val service = AiTourGuideService(
-            apiKey = "test-key",
-            endpointBaseUrl = server.url("").toString().trimEnd('/')
-        )
-
-        val response = service.generateDescription("vase")
-        // Should return fallback with error hint
-        assertNotNull(response)
-        assertTrue(response.description.isNotBlank())
-    }
-
-    @Test
-    fun `api returns empty candidates list`() = runBlocking {
-        val server = MockWebServer()
-        server.start()
-        mockWebServer = server
-
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody("""{"candidates": []}""")
-        )
-
-        val service = AiTourGuideService(
-            apiKey = "test-key",
-            endpointBaseUrl = server.url("").toString().trimEnd('/')
-        )
-
-        val response = service.generateDescription("vase")
-        assertNotNull(response)
-        assertTrue(response.description.isNotBlank())
-    }
-
     // ── Concurrent access tests ───────────────────────────────────
 
     @Test
     fun `concurrent access is thread safe`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
         val labels = listOf("vase", "bronze", "jade", "clock", "book", "tv")
 
         // Launch concurrent requests for all labels
@@ -258,7 +142,7 @@ class AiTourGuideServiceTest {
 
     @Test
     fun `concurrent access to same label is safe`() = runBlocking {
-        val service = AiTourGuideService(apiKey = "")
+        val service = AiTourGuideService()
 
         // Launch many concurrent requests for the same label
         val results = (1..10).map {

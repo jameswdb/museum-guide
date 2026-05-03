@@ -96,8 +96,8 @@ class CameraFragment : Fragment() {
         val db = ExhibitDatabase.getInstance(requireContext())
         exhibitRepository = ExhibitRepository(db.exhibitDao())
 
-        // Initialise AI tour guide service (Gemini API)
-        aiTourGuideService = AiTourGuideService()
+        // Initialise AI tour guide service (multi-provider)
+        aiTourGuideService = AiTourGuideService(requireContext().applicationContext)
 
         // Seed sample data for demo
         lifecycleScope.launch {

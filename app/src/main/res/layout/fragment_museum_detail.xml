@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Museum name -->
+        <TextView
+            android:id="@+id/museum_detail_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/primary" />
+
+        <!-- City -->
+        <TextView
+            android:id="@+id/museum_detail_city"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="16sp"
+            android:textColor="#666666" />
+
+        <!-- Brief -->
+        <TextView
+            android:id="@+id/museum_detail_brief"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="15sp"
+            android:textColor="@color/on_background"
+            android:lineSpacingExtra="4sp"
+            android:padding="12dp"
+            android:background="#FFF3E0"
+            android:gravity="center" />
+
+        <!-- Full description -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="博物馆介绍"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/on_background" />
+
+        <TextView
+            android:id="@+id/museum_detail_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="15sp"
+            android:textColor="@color/on_background"
+            android:lineSpacingExtra="6sp" />
+
+        <!-- Significance -->
+        <TextView
+            android:id="@+id/museum_detail_significance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textSize="14sp"
+            android:textColor="#444444"
+            android:lineSpacingExtra="4sp"
+            android:padding="12dp"
+            android:background="#F0F0F0" />
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="20dp"
+            android:background="#DDDDDD" />
+
+        <!-- Exhibits section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="镇馆之宝"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/on_background" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="13sp"
+            android:textColor="#999999"
+            android:text="点击展品可播放语音介绍" />
+
+        <!-- Exhibit list container -->
+        <LinearLayout
+            android:id="@+id/exhibit_list_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp" />
+
+        <!-- Play all button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_play_all"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="20dp"
+            android:text="🎧 播报博物馆全部介绍"
+            android:textSize="16sp"
+            app:icon="@android:drawable/ic_media_play"
+            style="@style/Widget.MaterialComponents.Button" />
+
+    </LinearLayout>
+
+</ScrollView>

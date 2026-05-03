@@ -3,12 +3,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/nav_graph"
-    app:startDestination="@id/camera_fragment">
+    app:startDestination="@id/home_fragment">
+
+    <fragment
+        android:id="@+id/home_fragment"
+        android:name="com.example.museumguide.ui.HomeFragment"
+        android:label="@string/home_title"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_home_to_museum_detail"
+            app:destination="@id/museum_detail_fragment" />
+    </fragment>
 
     <fragment
         android:id="@+id/camera_fragment"
         android:name="com.example.museumguide.ui.CameraFragment"
-        android:label="@string/scan_hint"
+        android:label="@string/btn_switch_to_camera"
         tools:layout="@layout/fragment_camera">
         <action
             android:id="@+id/action_camera_to_exhibit_detail"
@@ -34,6 +44,17 @@
             android:name="exhibit_id"
             app:argType="long"
             android:defaultValue="-1L" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/museum_detail_fragment"
+        android:name="com.example.museumguide.ui.MuseumDetailFragment"
+        android:label="@string/museum_detail_title"
+        tools:layout="@layout/fragment_museum_detail">
+        <argument
+            android:name="museum_id"
+            app:argType="integer"
+            android:defaultValue="-1" />
     </fragment>
 
 </navigation>
