@@ -1,5 +1,7 @@
 package com.example.museumguide.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.os.Bundle
@@ -7,6 +9,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -17,23 +21,40 @@ import com.example.museumguide.databinding.FragmentHomeBinding
 import com.example.museumguide.model.ChinaMuseums
 import com.example.museumguide.model.MuseumInfo
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Home / Settings screen for the Museum Guide app.
  *
  * Features:
- * - AI model provider configuration (Gemini, DeepSeek, Qwen, ERNIE)
  * - Museum location setting (manual + GPS auto-detect)
- * - China Top 10 Museums quick-access list
+ * - Quick access to China Top 10 Museums
+ * - Link to AI Settings page
  */
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
     private var currentConfig: AiConfiguration = AiConfiguration()
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            detectLocationByGps()
+        } else {
+            Toast.makeText(requireContext(), "需要位置权限才能自动定位", Toast.LENGTH_SHORT).show()
+            binding.btnGpsLocate.isEnabled = true
+            binding.btnGpsLocate.text = "📡 自动定位"
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -45,85 +66,35 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Load current config
         currentConfig = AiConfiguration.load(requireContext())
         applyConfigToUi()
 
-        // Save location
         binding.btnSaveLocation.setOnClickListener { saveLocation() }
+        binding.btnGpsLocate.setOnClickListener { onGpsClicked() }
 
-        // GPS location
-        binding.btnGpsLocate.setOnClickListener { detectLocationByGps() }
-
-        // Save AI config
-        binding.btnSaveAiConfig.setOnClickListener { saveAiConfig() }
-
-        // Provider radio group listener — update API key hint
-        binding.rgAiProvider.setOnCheckedChangeListener { _, checkedId ->
-            updateApiKeyHint(checkedId)
+        // Navigate to AI settings page
+        binding.btnGoAiSettings.setOnClickListener {
+            findNavController().navigate(R.id.action_home_to_ai_settings)
         }
 
-        // Set up museum list
         setupMuseumList()
-
-        // Set rank numbers on museum cards after binding
-        binding.rvMuseums.post {
-            updateMuseumRanks()
-        }
+        binding.rvMuseums.post { updateMuseumRanks() }
     }
 
     private fun applyConfigToUi() {
-        // Set provider radio
-        val radioId = when (currentConfig.activeProviderId) {
-            AiConfiguration.PROVIDER_GEMINI -> R.id.rb_gemini
-            AiConfiguration.PROVIDER_DEEPSEEK -> R.id.rb_deepseek
-            AiConfiguration.PROVIDER_QWEN -> R.id.rb_qwen
-            AiConfiguration.PROVIDER_ERNIE -> R.id.rb_ernie
-            else -> R.id.rb_gemini
-        }
-        binding.rgAiProvider.check(radioId)
-
-        // Set API key
-        when (currentConfig.activeProviderId) {
-            AiConfiguration.PROVIDER_GEMINI -> binding.etApiKey.setText(currentConfig.geminiApiKey)
-            AiConfiguration.PROVIDER_DEEPSEEK -> binding.etApiKey.setText(currentConfig.deepseekApiKey)
-            AiConfiguration.PROVIDER_QWEN -> binding.etApiKey.setText(currentConfig.qwenApiKey)
-            AiConfiguration.PROVIDER_ERNIE -> binding.etApiKey.setText(currentConfig.ernieApiKey)
-        }
-
-        // Set model name
-        when (currentConfig.activeProviderId) {
-            AiConfiguration.PROVIDER_DEEPSEEK -> binding.etModelName.setText(currentConfig.deepseekModelName)
-            AiConfiguration.PROVIDER_QWEN -> binding.etModelName.setText(currentConfig.qwenModelName)
-            AiConfiguration.PROVIDER_ERNIE -> binding.etModelName.setText(currentConfig.ernieModelName)
-            else -> binding.etModelName.setText("")
-        }
-
-        // Show/hide model name field
-        updateModelNameVisibility(currentConfig.activeProviderId)
-
         // Museum city
         binding.etMuseumCity.setText(currentConfig.museumCity)
         updateCurrentMuseumText(currentConfig.museumCity)
-
-        // API key hint
-        updateApiKeyHint(radioId)
     }
 
-    private fun updateApiKeyHint(checkedId: Int) {
-        val hint = when (checkedId) {
-            R.id.rb_gemini -> "获取地址: https://aistudio.google.com/apikey"
-            R.id.rb_deepseek -> "获取地址: https://platform.deepseek.com （注册送500万Token）"
-            R.id.rb_qwen -> "获取地址: https://bailian.console.aliyun.com （新用户7000万免费Token）"
-            R.id.rb_ernie -> "获取地址: https://console.bce.baidu.com/qianfan （ERNIE-Speed永久免费）"
-            else -> ""
+    private fun onGpsClicked() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            return
         }
-        binding.tvApiKeyHint.text = hint
-    }
-
-    private fun updateModelNameVisibility(providerId: String) {
-        val visible = providerId != AiConfiguration.PROVIDER_GEMINI
-        binding.modelNameInputLayout.visibility = if (visible) View.VISIBLE else View.GONE
+        detectLocationByGps()
     }
 
     private fun saveLocation() {
@@ -139,7 +110,6 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateCurrentMuseumText(city: String) {
-        // Try to find a known museum in this city
         val museum = ChinaMuseums.MUSEUMS.find {
             it.city.contains(city) || city.contains(it.city)
         }
@@ -154,8 +124,12 @@ class HomeFragment : Fragment() {
         lifecycleScope.launch {
             try {
                 val fusedClient = LocationServices.getFusedLocationProviderClient(requireContext())
+                val cancellationTokenSource = CancellationTokenSource()
                 val location = withContext(Dispatchers.IO) {
-                    fusedClient.lastLocation.result
+                    fusedClient.getCurrentLocation(
+                        com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                        cancellationTokenSource.token
+                    ).result
                 }
 
                 if (location != null) {
@@ -177,6 +151,8 @@ class HomeFragment : Fragment() {
                             AiConfiguration.save(requireContext(), currentConfig)
                             updateCurrentMuseumText(city)
                             Toast.makeText(requireContext(), "已自动定位到: $city", Toast.LENGTH_SHORT).show()
+                            // Find nearest museums within 1km
+                            findNearbyMuseums(location.latitude, location.longitude, city)
                         } else {
                             Toast.makeText(requireContext(), "无法识别城市，请手动输入", Toast.LENGTH_SHORT).show()
                         }
@@ -184,8 +160,10 @@ class HomeFragment : Fragment() {
                         Toast.makeText(requireContext(), "无法获取位置信息", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(requireContext(), "定位失败，请确保已开启位置权限和GPS", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "定位失败，请确保已开启GPS", Toast.LENGTH_SHORT).show()
                 }
+            } catch (e: SecurityException) {
+                Toast.makeText(requireContext(), "定位权限被拒绝", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Toast.makeText(requireContext(), "定位出错: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
@@ -195,15 +173,59 @@ class HomeFragment : Fragment() {
         }
     }
 
-    /** Extract the city name from an Android Address. */
-    private fun extractCity(address: Address): String {
-        // Try admin area (province-level city like 北京市)
-        val adminArea = address.adminArea ?: ""
-        // Try locality (city name like 北京)
-        val locality = address.locality ?: ""
-        // Try sub-admin area
-        val subAdmin = address.subAdminArea ?: ""
+    /**
+     * Find museums within 1km of the current location.
+     * If exactly one, auto-select and show info.
+     * If multiple, show a dialog for user to pick.
+     */
+    private fun findNearbyMuseums(lat: Double, lng: Double, city: String) {
+        val nearby = ChinaMuseums.MUSEUMS.filter { museum ->
+            distanceKm(lat, lng, museum.latitude, museum.longitude) <= 1.0
+        }
 
+        if (nearby.isEmpty()) {
+            // No museum within 1km, but we still have the city
+            return
+        }
+
+        if (nearby.size == 1) {
+            // Auto-select single museum
+            showMuseumMatched(nearby.first())
+            return
+        }
+
+        // Multiple museums — let user choose
+        val names = nearby.map { "${it.name}（${it.city}）" }.toTypedArray()
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("发现多个博物馆")
+            .setMessage("附近1公里内有多个博物馆，请选择：")
+            .setItems(names) { _, which ->
+                showMuseumMatched(nearby[which])
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showMuseumMatched(museum: MuseumInfo) {
+        binding.tvCurrentMuseum.text = "📍 ${museum.name}（${museum.city}）— 距您最近"
+        Toast.makeText(requireContext(), "已定位到: ${museum.name}", Toast.LENGTH_LONG).show()
+    }
+
+    /** Haversine distance in km between two lat/lng points. */
+    private fun distanceKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val r = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLng = Math.toRadians(lng2 - lng1)
+        val sinDLat = sin(dLat / 2.0)
+        val sinDLng = sin(dLng / 2.0)
+        val a = sinDLat * sinDLat + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sinDLng * sinDLng
+        return r * 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
+    }
+
+    private fun extractCity(address: Address): String {
+        val adminArea = address.adminArea ?: ""
+        val locality = address.locality ?: ""
+        val subAdmin = address.subAdminArea ?: ""
         return when {
             locality.isNotBlank() -> locality
             adminArea.isNotBlank() -> adminArea
@@ -212,76 +234,28 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun saveAiConfig() {
-        val selectedId = binding.rgAiProvider.checkedRadioButtonId
-        val providerId = when (selectedId) {
-            R.id.rb_gemini -> AiConfiguration.PROVIDER_GEMINI
-            R.id.rb_deepseek -> AiConfiguration.PROVIDER_DEEPSEEK
-            R.id.rb_qwen -> AiConfiguration.PROVIDER_QWEN
-            R.id.rb_ernie -> AiConfiguration.PROVIDER_ERNIE
-            else -> AiConfiguration.PROVIDER_GEMINI
-        }
-        val apiKey = binding.etApiKey.text.toString().trim()
-        val modelName = binding.etModelName.text.toString().trim()
-
-        // Preserve other API keys
-        currentConfig = when (providerId) {
-            AiConfiguration.PROVIDER_GEMINI -> currentConfig.copy(
-                activeProviderId = providerId,
-                geminiApiKey = apiKey
-            )
-            AiConfiguration.PROVIDER_DEEPSEEK -> currentConfig.copy(
-                activeProviderId = providerId,
-                deepseekApiKey = apiKey,
-                deepseekModelName = modelName.ifBlank { "deepseek-chat" }
-            )
-            AiConfiguration.PROVIDER_QWEN -> currentConfig.copy(
-                activeProviderId = providerId,
-                qwenApiKey = apiKey,
-                qwenModelName = modelName.ifBlank { "qwen-turbo" }
-            )
-            AiConfiguration.PROVIDER_ERNIE -> currentConfig.copy(
-                activeProviderId = providerId,
-                ernieApiKey = apiKey,
-                ernieModelName = modelName.ifBlank { "ernie-speed-8k" }
-            )
-            else -> currentConfig
-        }
-
-        AiConfiguration.save(requireContext(), currentConfig)
-        Toast.makeText(requireContext(), "AI配置已保存", Toast.LENGTH_SHORT).show()
-    }
-
     private fun setupMuseumList() {
         binding.rvMuseums.layoutManager = LinearLayoutManager(requireContext())
         binding.rvMuseums.adapter = MuseumAdapter(
             museums = ChinaMuseums.MUSEUMS,
             onClick = { museum ->
-                val bundle = Bundle().apply {
-                    putInt("museum_id", museum.id)
-                }
+                val bundle = Bundle().apply { putInt("museum_id", museum.id) }
                 findNavController().navigate(R.id.action_home_to_museum_detail, bundle)
             }
         )
     }
 
-    /** Set the rank number on each museum card. */
     private fun updateMuseumRanks() {
-        val adapter = binding.rvMuseums.adapter
-        if (adapter != null) {
-            for (i in 0 until adapter.itemCount) {
-                val holder = binding.rvMuseums.findViewHolderForAdapterPosition(i)
-                val rankView = holder?.itemView?.findViewById<android.widget.TextView>(
-                    com.example.museumguide.R.id.museum_rank
-                )
-                rankView?.text = "${i + 1}"
-            }
+        val adapter = binding.rvMuseums.adapter ?: return
+        for (i in 0 until adapter.itemCount) {
+            val holder = binding.rvMuseums.findViewHolderForAdapterPosition(i)
+            val rankView = holder?.itemView?.findViewById<android.widget.TextView>(R.id.museum_rank)
+            rankView?.text = "${i + 1}"
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Refresh config in case it was changed elsewhere
         currentConfig = AiConfiguration.load(requireContext())
         applyConfigToUi()
     }

@@ -110,11 +110,15 @@
 
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ── AI Model Configuration Section ── -->
+        <!-- ── AI Model Configuration — link to dedicated settings page ── -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/ai_settings_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
             app:cardElevation="2dp"
             app:cardCornerRadius="12dp"
             style="@style/Widget.MaterialComponents.CardView">
@@ -122,129 +126,42 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:orientation="horizontal"
                 android:padding="16dp">
 
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="🤖 AI 模型配置"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/on_background" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="选择AI模型、配置API密钥"
+                        android:textSize="13sp"
+                        android:textColor="#999999"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
                 <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🤖 AI 模型配置"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/on_background"
-                    android:layout_marginBottom="12dp" />
-
-                <!-- Provider selector -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="AI 模型"
-                    android:textSize="14sp"
-                    android:textColor="#666666"
-                    android:layout_marginBottom="4dp" />
-
-                <RadioGroup
-                    android:id="@+id/rg_ai_provider"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp">
-
-                    <RadioButton
-                        android:id="@+id/rb_gemini"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Google Gemini 2.0 Flash（支持图片识别）"
-                        android:textSize="14sp"
-                        android:padding="4dp" />
-
-                    <RadioButton
-                        android:id="@+id/rb_deepseek"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="DeepSeek（深度求索，超低价）"
-                        android:textSize="14sp"
-                        android:padding="4dp" />
-
-                    <RadioButton
-                        android:id="@+id/rb_qwen"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="通义千问 Qwen（阿里云，新用户7000万免费Token）"
-                        android:textSize="14sp"
-                        android:padding="4dp" />
-
-                    <RadioButton
-                        android:id="@+id/rb_ernie"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="文心一言 ERNIE（百度千帆，永久免费）"
-                        android:textSize="14sp"
-                        android:padding="4dp" />
-
-                </RadioGroup>
-
-                <!-- API Key input -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="API Key"
-                    android:textSize="14sp"
-                    android:textColor="#666666"
-                    android:layout_marginBottom="4dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/api_key_input_layout"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="输入所选模型的API Key"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    app:passwordToggleEnabled="true"
-                    android:layout_marginBottom="8dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/et_api_key"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="textPassword"
-                        android:textSize="14sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- Model/endpoint config (optional) -->
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/model_name_input_layout"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="模型名称（可选，默认值即可）"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    android:layout_marginBottom="8dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/et_model_name"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textSize="14sp" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <Button
-                    android:id="@+id/btn_save_ai_config"
+                    android:id="@+id/btn_go_ai_settings"
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
-                    android:text="保存AI配置"
-                    android:layout_gravity="end"
-                    style="@style/Widget.MaterialComponents.Button" />
-
-                <!-- Key hint text -->
-                <TextView
-                    android:id="@+id/tv_api_key_hint"
-                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textSize="12sp"
-                    android:textColor="#999999"
-                    android:lineSpacingExtra="2sp"
-                    android:text="💡 Gemini: https://aistudio.google.com/apikey\n💡 DeepSeek: https://platform.deepseek.com\n💡 通义千问: https://bailian.console.aliyun.com（新用户7000万免费Token）\n💡 文心一言: https://console.bce.baidu.com/qianfan（ERNIE-Speed永久免费）" />
+                    android:text="配置 ›"
+                    android:textSize="16sp"
+                    android:textColor="@color/primary"
+                    android:textStyle="bold"
+                    android:gravity="center_vertical" />
 
             </LinearLayout>
 

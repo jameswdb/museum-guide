@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -64,6 +65,9 @@ class CameraFragment : Fragment() {
 
     /** Whether the gallery review overlay is currently shown. */
     private var isGalleryMode = false
+
+    /** Most recent camera frame bitmap for shutter capture. */
+    private var lastBitmap: Bitmap? = null
 
     // Gallery image picker launcher
     private val galleryLauncher = registerForActivityResult(
@@ -130,6 +134,13 @@ class CameraFragment : Fragment() {
             galleryLauncher.launch("image/*")
         }
 
+        // Shutter button — immediate detection on current frame
+        binding.btnShutter.setOnClickListener {
+            if (!isGalleryMode) {
+                triggerImmediateDetection()
+            }
+        }
+
         // Close gallery overlay button
         binding.btnCloseGallery.setOnClickListener {
             closeGalleryMode()
@@ -179,6 +190,7 @@ class CameraFragment : Fragment() {
      */
     private fun startDetectionLoop() {
         cameraManager?.onFrameCaptured = { bitmap, _ ->
+            lastBitmap = bitmap
             // Frame-skipping for performance
             if (frameSkip++ % frameInterval == 0) {
                 processFrame(bitmap)
@@ -421,6 +433,37 @@ class CameraFragment : Fragment() {
         binding.galleryOverlay.visibility = View.GONE
         binding.galleryResultText.visibility = View.GONE
         binding.galleryImageView.setImageBitmap(null)
+    }
+
+    /**
+     * Trigger immediate detection on the most recent camera frame.
+     * This bypasses the 2-second dwell mechanism — useful for the shutter button.
+     */
+    private fun triggerImmediateDetection() {
+        val bitmap = lastBitmap ?: return
+        if (isGalleryMode) return
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val detections = objectDetector?.detect(bitmap) ?: emptyList()
+                val top = detections.firstOrNull()
+                if (top != null && top.confidence >= 0.5f) {
+                    withContext(Dispatchers.Main) {
+                        // Bypass dwell — directly trigger recognition
+                        currentDetectionLabel = top.label
+                        detectionStartTime = System.nanoTime()
+                        introductionTriggered = false
+                        onExhibitRecognised(top.label)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "未检测到物体，请对准展品", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("CameraFragment", "Shutter detection failed", e)
+            }
+        }
     }
 
     override fun onDestroyView() {

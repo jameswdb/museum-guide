@@ -24,4 +24,6 @@
     <!-- New strings for v1.2 Home/Settings -->
     <string name="home_title">首页</string>
     <string name="museum_detail_title">博物馆详情</string>
+    <string name="ai_settings_title">AI 模型配置</string>
+    <string name="shutter_capture">拍照识别</string>
 </resources>

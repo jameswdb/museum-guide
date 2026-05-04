@@ -13,6 +13,9 @@
         <action
             android:id="@+id/action_home_to_museum_detail"
             app:destination="@id/museum_detail_fragment" />
+        <action
+            android:id="@+id/action_home_to_ai_settings"
+            app:destination="@id/ai_settings_fragment" />
     </fragment>
 
     <fragment
@@ -56,5 +59,11 @@
             app:argType="integer"
             android:defaultValue="-1" />
     </fragment>
+
+    <fragment
+        android:id="@+id/ai_settings_fragment"
+        android:name="com.example.museumguide.ui.AiSettingsFragment"
+        android:label="@string/ai_settings_title"
+        tools:layout="@layout/fragment_ai_settings" />
 
 </navigation>

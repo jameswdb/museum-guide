@@ -56,6 +56,21 @@
         android:scaleType="center"
         android:elevation="4dp" />
 
+    <!-- Shutter button (bottom-center) for tap-to-capture -->
+    <ImageButton
+        android:id="@+id/btn_shutter"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_gravity="bottom|center"
+        android:layout_marginBottom="48dp"
+        android:src="@android:drawable/ic_menu_camera"
+        android:background="@drawable/shutter_button_bg"
+        android:contentDescription="@string/shutter_capture"
+        android:scaleType="center"
+        android:elevation="6dp"
+        android:clickable="true"
+        android:focusable="true" />
+
     <!-- Gallery review overlay (hidden by default) -->
     <FrameLayout
         android:id="@+id/gallery_overlay"
