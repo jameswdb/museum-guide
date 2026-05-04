@@ -43,6 +43,7 @@ class HomeFragment : Fragment() {
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
     private var currentConfig: AiConfiguration = AiConfiguration()
+    private var gpsCancellationToken: CancellationTokenSource? = null
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -121,14 +122,18 @@ class HomeFragment : Fragment() {
         binding.btnGpsLocate.isEnabled = false
         binding.btnGpsLocate.text = "定位中…"
 
+        // Cancel any previous pending GPS request
+        gpsCancellationToken?.cancel()
+        gpsCancellationToken = CancellationTokenSource()
+
         lifecycleScope.launch {
             try {
                 val fusedClient = LocationServices.getFusedLocationProviderClient(requireContext())
-                val cancellationTokenSource = CancellationTokenSource()
+                val token = gpsCancellationToken!!.token
                 val location = withContext(Dispatchers.IO) {
                     fusedClient.getCurrentLocation(
                         com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
-                        cancellationTokenSource.token
+                        token
                     ).result
                 }
 
@@ -261,6 +266,8 @@ class HomeFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        gpsCancellationToken?.cancel()
+        gpsCancellationToken = null
         super.onDestroyView()
         _binding = null
     }
